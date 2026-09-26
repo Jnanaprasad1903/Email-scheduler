@@ -1,0 +1,21 @@
+{
+  "name": "reachinbox-email-scheduler-backend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Backend for the ReachInbox Email Scheduler",
+  "scripts": {
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "prisma": "^6.16.2",
+    "typescript": "^5.9.2"
+  }
+}

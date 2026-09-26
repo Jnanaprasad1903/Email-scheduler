@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CampaignStatus {
+  SCHEDULED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum EmailStatus {
+  SCHEDULED
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum OutboxEventType {
+  EMAIL_SCHEDULED
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model User {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String   @unique
+  name          String?
+  avatarUrl     String?
+  googleSubject String?  @unique
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+
+  senders   Sender[]
+  campaigns Campaign[]
+
+  @@map("users")
+}
+
+model Sender {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  email     String
+  name      String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+  emails    Email[]
+
+  @@unique([userId, email])
+  @@index([userId])
+  @@map("senders")
+}
+
+model Campaign {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String         @db.Uuid
+  senderId    String         @db.Uuid
+  subject     String
+  body        String
+  startAt     DateTime       @db.Timestamptz(6)
+  delayMs     Int
+  hourlyLimit Int
+  status      CampaignStatus @default(SCHEDULED)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @db.Timestamptz(6)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sender Sender  @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  emails Email[]
+
+  @@index([userId])
+  @@index([senderId])
+  @@index([status, startAt])
+  @@map("campaigns")
+}
+
+model Email {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId   String      @db.Uuid
+  senderId     String      @db.Uuid
+  recipient    String
+  subject      String
+  body         String
+  sequence     Int
+  scheduledAt  DateTime    @db.Timestamptz(6)
+  status       EmailStatus @default(SCHEDULED)
+  attemptCount Int         @default(0)
+  sentAt       DateTime?   @db.Timestamptz(6)
+  lastError    String?
+  createdAt    DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime    @updatedAt @db.Timestamptz(6)
+
+  campaign     Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sender       Sender        @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  outboxEvents OutboxEvent[]
+
+  @@index([status, scheduledAt])
+  @@index([campaignId])
+  @@index([senderId])
+  @@index([recipient])
+  @@map("emails")
+}
+
+model OutboxEvent {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  emailId     String          @db.Uuid
+  eventType   OutboxEventType
+  payload     Json
+  status      OutboxStatus    @default(PENDING)
+  attempts    Int             @default(0)
+  availableAt DateTime        @default(now()) @db.Timestamptz(6)
+  processedAt DateTime?       @db.Timestamptz(6)
+  lastError   String?
+  createdAt   DateTime        @default(now()) @db.Timestamptz(6)
+
+  email Email @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@unique([emailId, eventType])
+  @@index([status, availableAt])
+  @@map("outbox_events")
+}
