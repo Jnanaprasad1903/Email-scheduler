@@ -44,7 +44,7 @@ For each significant engineering problem:
 | Backend | In Progress |
 | Database | Done |
 | Docker infrastructure | Done |
-| Scheduling API | Not started |
+| Scheduling API | Done |
 | Transactional outbox | Not started |
 | Redis / BullMQ | Not started |
 | Email worker | Not started |
@@ -390,3 +390,144 @@ All three infrastructure services are running, healthy, and accessible.
 The Prisma migration was applied to the Compose PostgreSQL instance.
 Backend environment variables are updated for all future issues.
 Issue #3 is complete.
+
+---
+
+### 2026-09-27 — Express API + Email Scheduling Endpoint (Issue #4)
+
+**Problem:**  
+The system needs an HTTP API so the frontend dashboard can schedule email
+campaigns. The API must validate requests, create a campaign record and
+individual email records atomically, and be structured so it is easy to
+extend in future issues.
+
+**Investigation and approaches considered:**
+
+*Project structure:*  
+Evaluated flat, feature-based, and layered approaches. Selected layered
+(`routes/services/middleware/lib`) because routes stay thin (HTTP only),
+services are testable without HTTP, and the pattern is well understood
+without being over-engineered.
+
+*Request validation:*  
+Evaluated manual checks, Joi, and Zod. Selected Zod because it is
+TypeScript-first — schemas double as TypeScript types via `z.infer`,
+eliminating duplication between runtime validation and compile-time types.
+
+*scheduledAt calculation:*  
+Evaluated computing per-recipient slots that respect the hourly limit at
+insert time versus a simple sequence-based delay. Selected
+`startAt + index × delayMs` because the architecture specifies that the
+worker + Redis rate-limiter is the final authority on actual send timing.
+Pre-computing hourly slots at the API layer would duplicate that logic and
+be inaccurate when multiple workers run concurrently.
+
+*Transaction strategy:*  
+Evaluated Prisma batch transactions vs interactive transactions. Selected
+Prisma interactive `$transaction(async (tx) => { ... })` because email
+records need the campaign ID from the same transaction, and interactive
+transactions allow chaining. This also sets up Issue #5 cleanly — outbox
+events are added to the same transaction block with no structural changes.
+
+*Error handling:*  
+Selected central Express error middleware. Zod errors, AppErrors, and
+unexpected errors all flow to one handler and produce a consistent JSON
+response shape.
+
+*Authentication:*  
+Google OAuth is Issue #9. A stub `requireAuth` middleware was added that
+reads `x-user-id` from request headers for testing. Issue #9 replaces only
+the body of this middleware — nothing else in the codebase changes.
+
+*Recipient input:*  
+The API accepts an array of email strings. The frontend (Issue #10) handles
+CSV parsing before sending. API receives clean, validated data.
+
+**Decision:**  
+Layered structure + Zod + interactive Prisma transaction + central error
+handler + auth stub.
+
+**Files created:**
+
+| File | Purpose |
+|---|---|
+| `src/server.ts` | Entry point: load env, start HTTP server |
+| `src/app.ts` | Express app: Helmet, CORS, JSON, routes, error handler |
+| `src/routes/index.ts` | Root router at /api, health check endpoint |
+| `src/routes/campaigns.ts` | POST /schedule, GET /, GET /:id |
+| `src/routes/senders.ts` | GET /, POST / |
+| `src/services/campaignService.ts` | Create campaign + emails in one transaction |
+| `src/services/senderService.ts` | List and create sender identities |
+| `src/middleware/auth.ts` | Stub auth (x-user-id header, replaced in Issue #9) |
+| `src/middleware/errorHandler.ts` | Central error handler (Zod, AppError, unexpected) |
+| `src/lib/AppError.ts` | Typed HTTP error with status code |
+| `src/lib/asyncHandler.ts` | Wraps async routes to forward errors to next() |
+| `src/lib/validators.ts` | Zod schemas: scheduleRequestSchema, createSenderSchema |
+
+**API endpoints:**
+
+| Method | Path | Description |
+|---|---|---|
+| GET | /api/health | Health check |
+| POST | /api/senders | Create a sender identity |
+| GET | /api/senders | List senders for authenticated user |
+| POST | /api/campaigns/schedule | Schedule a campaign (creates campaign + emails) |
+| GET | /api/campaigns | List campaigns for authenticated user |
+| GET | /api/campaigns/:id | Get campaign with all email records |
+
+**scheduledAt calculation:**
+```
+email[0].scheduledAt = startAt + 0 × delayMs  (first send)
+email[1].scheduledAt = startAt + 1 × delayMs
+email[N].scheduledAt = startAt + N × delayMs
+```
+
+**Verification — commands run and results:**
+```
+npm run typecheck        → No TypeScript errors  (exit 0)
+npm run dev              → Server listening on http://localhost:3000
+
+GET  /api/health         → 200 { status: 'ok', timestamp: '...' }
+POST /api/senders        → 201 { id, userId, email, name, createdAt, updatedAt }
+POST /api/campaigns/schedule (3 recipients, 2000ms delay)
+  → 201 { campaignId, emailCount: 3, status: 'SCHEDULED',
+          firstScheduledAt: '12:00:00', lastScheduledAt: '12:00:04' }
+
+DB verification (psql):
+  alice@example.com   seq=1  SCHEDULED
+  bob@example.com     seq=2  SCHEDULED
+  charlie@example.com seq=3  SCHEDULED
+
+Validation test (missing/invalid fields)
+  → 400 { error: 'Validation failed', issues: [...field-level detail...] }
+
+Auth test (no x-user-id header)
+  → 401 { error: 'Unauthorized ...' }
+```
+
+**Acceptance criteria:**
+- [x] Express API structure implemented (layered: routes/services/middleware/lib)
+- [x] Scheduling endpoint implemented (POST /api/campaigns/schedule)
+- [x] Request validation implemented (Zod, field-level errors)
+- [x] Recipient validation implemented (email format, min 1, max 10,000)
+- [x] Campaign creation implemented (atomic Prisma transaction)
+- [x] Email creation implemented (createMany in same transaction)
+- [x] Errors handled consistently (central error handler)
+- [x] Sender endpoints implemented (GET + POST /api/senders)
+- [x] TypeScript check passes
+- [x] Manual API tests pass against live DB
+
+**Tradeoffs / limitations:**
+- Auth is a stub. All routes are effectively open until Issue #9.
+  The stub is intentional scaffolding, not an oversight.
+- Recipients are deduplicated silently. Duplicates in the input array are
+  removed before insertion.
+- There is no pagination on GET /api/campaigns or GET /api/campaigns/:id/emails.
+  This is acceptable for a development take-home; pagination can be added later.
+- Recipient input is a JSON array. CSV parsing is the frontend's responsibility.
+
+**Result:**  
+Express API is running. Campaign scheduling, sender management, and error
+handling are fully implemented and tested against the live Docker PostgreSQL
+instance. The transaction structure is already prepared for Issue #5
+(outbox events are added to the same transaction block). Issue #4 is complete.
