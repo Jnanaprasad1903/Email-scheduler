@@ -80,7 +80,7 @@ async function runWorkerProcessor(emailId: string, mockEmail: any) {
   const { checkRateLimit } = await import('../services/rateLimiter.js');
   const { notifyRateLimitReached, notifyCampaignCompleted } = await import('../services/slackService.js');
   const { prisma } = await import('../db/prisma.js');
-  const { transporter } = await import('../lib/mailer.js');
+  const { sendEmail } = await import('../lib/mailer.js');
 
   const email = mockEmail;
   if (!email) throw new Error(`Email not found: ${emailId}`);
@@ -99,12 +99,13 @@ async function runWorkerProcessor(emailId: string, mockEmail: any) {
 
   // Attempt send
   try {
-    const info = await transporter.sendMail({
-      from: email.sender.email,
-      to: email.recipient,
-      subject: email.subject,
-      html: email.body,
-    });
+    const info = await sendEmail(
+      email.recipient,
+      email.subject,
+      email.body,
+      email.sender.email,
+      email.sender.name
+    );
     await prisma.email.update({ where: { id: email.id }, data: { status: 'SENT', sentAt: new Date() } });
 
     const allDone = mockCampaignFindMany.mock.results[0]?.value ?? [];

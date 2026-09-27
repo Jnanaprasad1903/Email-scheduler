@@ -83,7 +83,7 @@ export async function scheduleCampaign(userId: string, data: ScheduleRequest) {
       data.subject,
       data.body,
       data.startAt,
-      data.delayMs,
+      data.delayMs ?? (Number(process.env['EMAIL_DELAY_SECONDS'] ?? 5) * 1000)
     );
 
     // Pre-assign UUIDs to email records so outbox events can reference
