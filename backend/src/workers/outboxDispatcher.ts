@@ -128,6 +128,7 @@ async function dispatchBatch(): Promise<void> {
  * and skips emails that are already in SENT state (idempotency).
  */
 async function recoverStuckEvents(): Promise<void> {
+  // 1. Recover stuck outbox events
   const { count } = await prisma.outboxEvent.updateMany({
     where: { status: 'PROCESSING' },
     data: { status: 'PENDING' },
@@ -135,6 +136,37 @@ async function recoverStuckEvents(): Promise<void> {
 
   if (count > 0) {
     console.log(`[outbox] Recovered ${count} stuck PROCESSING event(s)`);
+  }
+
+  // 2. Recover orphaned emails that were left in PROCESSING when the worker crashed
+  const stuckEmails = await prisma.email.findMany({
+    where: { status: 'PROCESSING' },
+  });
+
+  if (stuckEmails.length > 0) {
+    console.log(`[outbox] Found ${stuckEmails.length} orphaned PROCESSING email(s). Re-queueing...`);
+    
+    for (const email of stuckEmails) {
+      // Revert to SCHEDULED
+      await prisma.email.update({
+        where: { id: email.id },
+        data: { status: 'SCHEDULED' },
+      });
+
+      // Re-enqueue directly to BullMQ
+      const delay = Math.max(0, email.scheduledAt.getTime() - Date.now());
+      
+      // Use jobData matching what the worker expects
+      const jobData: EmailJobData = {
+        emailId: email.id,
+        outboxEventId: '', // Worker doesn't use it, and it's already PROCESSED
+      };
+
+      await emailQueue.add('send-email', jobData, {
+        delay,
+        jobId: email.id,
+      });
+    }
   }
 }
 

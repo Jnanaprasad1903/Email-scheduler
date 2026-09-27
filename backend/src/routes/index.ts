@@ -3,6 +3,7 @@ import { campaignRouter } from './campaigns.js';
 import { senderRouter } from './senders.js';
 import { emailRouter } from './emails.js';
 import { authRouter } from './auth.js';
+import { slackRouter } from './slack.js';
 
 export const router = Router();
 
@@ -15,3 +16,4 @@ router.use('/auth', authRouter);
 router.use('/campaigns', campaignRouter);
 router.use('/senders', senderRouter);
 router.use('/emails', emailRouter);
+router.use('/slack', slackRouter);

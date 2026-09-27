@@ -37,11 +37,14 @@ enum OutboxStatus {
 model User {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email         String   @unique
+  password      String?
   name          String?
   avatarUrl     String?
   googleSubject String?  @unique
-  createdAt     DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+  slackWebhookUrl String?
+  slackTeamName   String?
 
   senders   Sender[]
   campaigns Campaign[]

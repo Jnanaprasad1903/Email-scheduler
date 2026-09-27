@@ -24,8 +24,13 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());
 
+import { bullBoardRouter } from './lib/bullBoard.js';
+
 // All API routes under /api
 app.use('/api', router);
+
+// BullMQ Dashboard
+app.use('/admin/queues', bullBoardRouter);
 
 // Central error handler — must be last
 app.use(errorHandler);

@@ -14,8 +14,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bull-board/api": "^9.10.1",
+    "@bull-board/express": "^9.10.1",
     "@elastic/elasticsearch": "^8.19.2",
     "@prisma/client": "^6.16.2",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^6.3.9",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
@@ -30,6 +33,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

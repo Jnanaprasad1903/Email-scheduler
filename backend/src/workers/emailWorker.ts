@@ -4,6 +4,7 @@ import { EmailJobData, searchQueue } from '../lib/queue.js';
 import { prisma } from '../db/prisma.js';
 import { sendEmail } from '../lib/mailer.js';
 import { checkRateLimit } from '../services/rateLimiter.js';
+import { notifyRateLimitReached, notifyCampaignCompleted } from '../services/slackService.js';
 
 export const emailWorker = new Worker<EmailJobData>(
   'email',
@@ -34,9 +35,16 @@ export const emailWorker = new Worker<EmailJobData>(
       return;
     }
 
-    // Fetch attachments via raw query to bypass Prisma client schema cache
-    const campaignRaw = await prisma.$queryRaw<{attachments: any}[]>`SELECT attachments FROM campaigns WHERE id = ${email.campaignId}::uuid`;
+    // Fetch attachments and slackWebhookUrl via raw query to bypass Prisma client schema cache
+    const campaignRaw = await prisma.$queryRaw<{attachments: any, subject: string, slackWebhookUrl: string | null}[]>`
+      SELECT c.attachments, c.subject, u."slackWebhookUrl" 
+      FROM campaigns c 
+      JOIN users u ON c."userId" = u.id 
+      WHERE c.id = ${email.campaignId}::uuid
+    `;
     const attachments = campaignRaw[0]?.attachments;
+    const campaignSubject = campaignRaw[0]?.subject || 'Untitled Campaign';
+    const slackWebhookUrl = campaignRaw[0]?.slackWebhookUrl;
 
     // 3. Rate Limit Check (Issue #9)
     const rateLimit = await checkRateLimit(email.campaignId, email.id, email.campaign.hourlyLimit);
@@ -49,6 +57,10 @@ export const emailWorker = new Worker<EmailJobData>(
       
       console.log(`[worker] Rate limit hit for campaign ${email.campaignId}. Rescheduling to ${new Date(rateLimit.nextAvailableTime).toISOString()}`);
       
+      // Notify Slack asynchronously (fire and forget)
+      notifyRateLimitReached(slackWebhookUrl, email.campaignId, campaignSubject, email.campaign.hourlyLimit)
+        .catch(err => console.error('[worker] Slack notification error:', err));
+
       // Move the job to the delayed queue exactly until the next slot opens up
       await job.moveToDelayed(rateLimit.nextAvailableTime, job.token as string);
       
@@ -91,6 +103,10 @@ export const emailWorker = new Worker<EmailJobData>(
           where: { id: email.campaignId },
           data: { status: 'COMPLETED' },
         });
+        
+        // Notify Slack asynchronously that the entire campaign is done
+        notifyCampaignCompleted(slackWebhookUrl, email.campaignId, campaignSubject)
+          .catch(err => console.error('[worker] Slack completion notification error:', err));
       }
 
       await searchQueue.add('index-email', { emailId }, { jobId: `search-sent-${emailId}` });
