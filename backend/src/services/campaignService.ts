@@ -84,10 +84,29 @@ export async function scheduleCampaign(userId: string, data: ScheduleRequest) {
       data.delayMs,
     );
 
-    await tx.email.createMany({ data: emailRecords });
+    // Pre-assign UUIDs to email records so outbox events can reference
+    // the email IDs within the same transaction. createMany() does not
+    // return the created rows, so we must generate IDs before inserting.
+    const emailsWithIds = emailRecords.map((e) => ({
+      ...e,
+      id: crypto.randomUUID(),
+    }));
 
-    // Issue #5 will add outbox events here in the same transaction block:
-    // await tx.outboxEvent.createMany({ data: outboxRecords })
+    await tx.email.createMany({ data: emailsWithIds });
+
+    // Write one OutboxEvent per email in the SAME transaction.
+    // If this transaction commits, both the emails and their outbox events
+    // exist. If it rolls back, neither exists. This is the transactional
+    // outbox guarantee — no email can be scheduled without a corresponding
+    // event for the dispatcher to pick up.
+    await tx.outboxEvent.createMany({
+      data: emailsWithIds.map((email) => ({
+        emailId: email.id,
+        eventType: 'EMAIL_SCHEDULED' as const,
+        payload: {},
+        status: 'PENDING' as const,
+      })),
+    });
 
     return {
       campaignId: campaign.id,

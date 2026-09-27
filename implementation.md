@@ -45,7 +45,7 @@ For each significant engineering problem:
 | Database | Done |
 | Docker infrastructure | Done |
 | Scheduling API | Done |
-| Transactional outbox | Not started |
+| Transactional outbox | Done |
 | Redis / BullMQ | Not started |
 | Email worker | Not started |
 | Rate limiting | Not started |
@@ -528,6 +528,77 @@ Auth test (no x-user-id header)
 
 **Result:**  
 Express API is running. Campaign scheduling, sender management, and error
-handling are fully implemented and tested against the live Docker PostgreSQL
+Handling are fully implemented and tested against the live Docker PostgreSQL
 instance. The transaction structure is already prepared for Issue #5
 (outbox events are added to the same transaction block). Issue #4 is complete.
+
+---
+
+### 2026-09-27 — Transactional Outbox & Queue Setup (Issue #5)
+
+**Problem:**  
+We need a reliable way to enqueue email delivery jobs. If the server crashes
+between writing an email to PostgreSQL and enqueueing it to BullMQ/Redis,
+the email would be silently lost. We must implement the Transactional
+Outbox pattern to guarantee that jobs are reliably dispatched.
+
+**Investigation and approaches considered:**
+
+*Event creation:*  
+The outbox event must be written in the exact same transaction as the email
+record. If the transaction commits, both exist. If it rolls back, neither
+exists. Because Prisma's `createMany` does not return inserted records' IDs,
+we pre-generated UUIDs (`crypto.randomUUID()`) in Node.js so that the
+outbox events can explicitly reference the new email IDs in the same
+transaction block.
+
+*Dispatcher architecture:*  
+Evaluated a dedicated microservice versus a background worker running in
+the existing API process. Selected the same process for simplicity in this
+take-home assignment, utilizing `setInterval`/recursive `setTimeout` so
+the loop runs constantly in the background.
+
+*Locking strategy (Concurrency control):*  
+If multiple API processes are running, they might try to poll and dispatch
+the same `PENDING` outbox events simultaneously. We utilized PostgreSQL's
+`SELECT ... FOR UPDATE SKIP LOCKED` clause. This row-level lock ensures
+that concurrent dispatchers always claim distinct rows and never race
+or block each other.
+
+*Queue mechanism:*  
+Evaluated PostgreSQL-backed queues vs Redis/BullMQ. Selected BullMQ
+backed by `IORedis` (running in the Docker Compose stack). BullMQ natively
+supports delayed jobs and robust retry policies which are critical for
+staggering the campaign send schedule.
+
+**Decision:**  
+Pre-generate IDs for atomic insert + BullMQ on Redis + `SKIP LOCKED` 
+PostgreSQL polling dispatcher running in the API process.
+
+**Files created/modified:**
+
+| File | Purpose |
+|---|---|
+| `src/lib/redis.ts` | Shared `IORedis` connection instance for BullMQ |
+| `src/lib/queue.ts` | BullMQ `Queue` definition for the `email` queue |
+| `src/workers/outboxDispatcher.ts` | The dispatcher process polling outbox events |
+| `src/services/campaignService.ts` | Updated to insert `OutboxEvent` in transaction |
+| `src/server.ts` | Updated to start the dispatcher on server boot |
+
+**Acceptance criteria:**
+- [x] BullMQ and IORedis installed
+- [x] `OutboxEvent` records inserted atomically with `Email` records
+- [x] Pre-generated UUIDs implemented to link events to emails
+- [x] Dispatcher implemented to poll `PENDING` events
+- [x] PostgreSQL `FOR UPDATE SKIP LOCKED` implemented for concurrency control
+- [x] Stuck event recovery (resetting `PROCESSING` to `PENDING`) implemented
+- [x] Dispatcher enqueues jobs to BullMQ with correct `delay` based on `scheduledAt`
+- [x] Dispatcher marks outbox events as `PROCESSED` after enqueueing
+
+**Verification:**
+After scheduling a test campaign (2 recipients, 10s start delay, 2s stagger) via POST `/api/campaigns/schedule`, checking the PostgreSQL database directly via `psql` confirmed:
+- Two `outbox_events` were created.
+- Both quickly transitioned from `PENDING` to `PROCESSING` to `PROCESSED` status.
+
+**Result:**  
+Issue #5 is complete. We now have guaranteed reliable job dispatching to BullMQ.
