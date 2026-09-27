@@ -47,7 +47,7 @@ For each significant engineering problem:
 | Scheduling API | Done |
 | Transactional outbox | Done |
 | Redis / BullMQ | Not started |
-| Email worker | Not started |
+| Email worker | Done |
 | Rate limiting | Not started |
 | Elasticsearch | Not started |
 | Slack | Not started |
@@ -602,3 +602,56 @@ After scheduling a test campaign (2 recipients, 10s start delay, 2s stagger) via
 
 **Result:**  
 Issue #5 is complete. We now have guaranteed reliable job dispatching to BullMQ.
+
+---
+
+### 2026-09-27 — Email Worker & SMTP Integration (Issue #8)
+
+**Problem:**  
+We need a durable email delivery worker to process BullMQ jobs, enforce idempotency, integrate with SMTP, and handle failures via automated retries, whilst leaving rate limiting as an abstraction for the next issue.
+
+**Investigation and approaches considered:**
+
+*SMTP Integration:*  
+Evaluated `nodemailer` with real SMTP vs a mock integration. As per requirements, implemented Ethereal SMTP with `nodemailer` to mimic real-world network latency and error handling while exposing preview URLs.
+
+*Idempotency & Concurrency:*  
+Evaluated manual checks vs atomic updates. Selected an atomic `updateMany` in Prisma that simultaneously verifies the email's status is `SCHEDULED` and updates it to `PROCESSING`. This lock guarantees that multiple worker instances cannot deliver the same email simultaneously.
+
+*Error Handling:*  
+When SMTP fails, the error must be logged and the worker must intentionally throw. Catching the error and reverting the status to `SCHEDULED` ensures BullMQ natively handles exponential backoff retries.
+
+*Rate Limiting (Issue #9 Prep):*  
+Introduced a clean `checkRateLimit` abstraction returning a boolean. The actual Redis implementation is deferred to Issue #9, keeping Issue #8 focused purely on reliable delivery.
+
+**Decision:**  
+`nodemailer` with Ethereal SMTP + Atomic Prisma Status Lock (`SCHEDULED` -> `PROCESSING`) + Error Re-throwing for BullMQ Backoff.
+
+**Files created/modified:**
+
+| File | Purpose |
+|---|---|
+| `.env.example` & `.env` | Added `SMTP_*` and `WORKER_CONCURRENCY` variables |
+| `prisma/schema.prisma` | Ensured `PROCESSING` is in the `EmailStatus` enum |
+| `src/lib/mailer.ts` | Ethereal `nodemailer` setup and `sendEmail` helper |
+| `src/services/rateLimiter.ts` | Rate limit abstraction stub |
+| `src/workers/emailWorker.ts` | BullMQ worker enforcing locks, rate limits, and delivery |
+| `src/server.ts` | Updated to start the email worker on server boot |
+
+**Acceptance criteria:**
+- [x] Ethereal SMTP implementation used instead of mock timeouts
+- [x] Atomic `SCHEDULED -> PROCESSING` transition to prevent duplicate sends
+- [x] Redis rate limiting kept behind an abstraction
+- [x] Transient errors increment attempts and re-throw for BullMQ retry
+- [x] Concurrency configured via environment variables
+- [x] PostgreSQL acts as source of truth for email status
+- [x] Idempotent processing
+
+**Verification:**
+- Ran `tsc --noEmit` and passed.
+- Pushed a test job with immediate start.
+- Server logs showed the dispatcher claiming the event and the worker invoking `nodemailer`, successfully printing the Ethereal message preview URL.
+- DB verified that the email transitioned from `SCHEDULED` -> `PROCESSING` -> `SENT`.
+
+**Result:**  
+Issue #8 is complete. The application now processes queued events and dispatches simulated production emails correctly.
