@@ -43,7 +43,7 @@ For each significant engineering problem:
 | Repository setup | Done |
 | Backend | In Progress |
 | Database | Done |
-| Docker infrastructure | Not started |
+| Docker infrastructure | Done |
 | Scheduling API | Not started |
 | Transactional outbox | Not started |
 | Redis / BullMQ | Not started |
@@ -286,3 +286,107 @@ Initial Prisma schema and migration live under `backend/prisma`. The
 migration was applied to a live PostgreSQL instance and all 19 indexes were
 confirmed present. Prisma was selected for type-safe database access and
 versioned PostgreSQL migrations. Issue #2 is complete.
+
+---
+
+### 2026-09-26 — Docker Development Environment (Issue #3)
+
+**Problem:**  
+Developers need reproducible local instances of PostgreSQL, Redis, and
+Elasticsearch that start with one command, persist data across restarts,
+and match the credentials used by the backend. Without this, every
+developer must install and configure three services manually.
+
+**Investigation:**  
+Evaluated Docker Compose as the standard tool for multi-service local
+development environments. Considered whether to use one Dockerfile per
+service (custom images) or official images — official images are
+sufficient because no custom configuration is required beyond environment
+variables and volume mounts.
+
+For Elasticsearch 8, security (TLS + passwords) is enabled by default.
+Disabling it locally (`xpack.security.enabled=false`) avoids certificate
+setup and keeps the developer experience simple. Production would re-enable
+security. This is a deliberate and documented local-dev tradeoff.
+
+**Decision:**  
+Docker Compose with three services: `postgres:16-alpine`, `redis:7-alpine`,
+`elasticsearch:8.14.0`. All credentials come from a root `.env` file that
+is gitignored. Persistent named volumes ensure data survives container
+restarts. Health checks ensure dependent services wait for readiness.
+
+**Why these images:**
+- `postgres:16-alpine` — matches the version used in Issue #2.
+- `redis:7-alpine` — LTS version; Alpine minimises image size.
+- `elasticsearch:8.14.0` — matches the `@elastic/elasticsearch` v8 client
+  that will be installed in Issue #8.
+
+**Key configuration decisions:**
+
+| Setting | Value | Reason |
+|---|---|---|
+| Redis `--appendonly yes` | enabled | AOF persistence — BullMQ jobs survive Redis restart |
+| ES `xpack.security.enabled` | `false` | Avoid TLS/auth setup for local dev |
+| ES `ES_JAVA_OPTS` | `-Xms512m -Xmx512m` | Caps heap to avoid OOM on dev machines |
+| ES `discovery.type` | `single-node` | Required to start ES without a multi-node cluster |
+| Compose `version` key | removed | Obsolete in Compose v2+; caused a warning |
+
+**Files created:**
+
+| File | Purpose |
+|---|---|
+| `docker-compose.yml` | Defines postgres, redis, elasticsearch services with volumes and health checks |
+| `.env.example` (root) | Documents all Docker Compose variables with safe placeholder values |
+| `.env` (root, gitignored) | Real values consumed by docker-compose.yml at runtime |
+| `backend/.env.example` | Expanded with `REDIS_URL`, `ELASTICSEARCH_URL`, `NODE_ENV`, `PORT` |
+| `backend/.env` (gitignored) | Real values expanded with Redis and Elasticsearch URLs |
+
+**Verification — commands run and results:**
+
+```
+docker compose up -d
+→ All three containers created and started
+
+docker compose ps
+→ reachinbox-postgres      Up (healthy)   0.0.0.0:5432->5432/tcp
+→ reachinbox-redis         Up (healthy)   0.0.0.0:6379->6379/tcp
+→ reachinbox-elasticsearch Up (healthy)   0.0.0.0:9200->9200/tcp
+
+docker exec reachinbox-redis redis-cli -a reachinbox ping
+→ PONG
+
+GET http://localhost:9200/_cluster/health
+→ { "status": "green", "cluster_name": "reachinbox-cluster", ... }
+
+npx prisma migrate deploy
+→ Applying migration 20260926143000_init_email_scheduler
+→ All migrations have been successfully applied.
+
+psql \dt → 6 tables confirmed in Compose postgres container
+```
+
+**Acceptance criteria:**
+
+- [x] PostgreSQL container works
+- [x] Redis container works
+- [x] Elasticsearch container works
+- [x] Persistent volumes configured
+- [x] Health checks configured on all three services
+- [x] Environment variables documented in .env.example
+- [x] Backend can connect to all services
+- [x] Prisma migration applies cleanly against Compose postgres
+
+**Tradeoffs / limitations:**
+- Elasticsearch security is disabled locally. This is intentional for
+  developer experience. Any staging/production deployment must re-enable
+  `xpack.security.enabled` and configure proper credentials.
+- Redis password is set via `requirepass` so it is not a completely open
+  instance, but the password is a simple local-dev value.
+- The `postgres_data` volume is local to the developer's machine. Team
+  members each have independent databases.
+
+**Result:**  
+All three infrastructure services are running, healthy, and accessible.
+The Prisma migration was applied to the Compose PostgreSQL instance.
+Backend environment variables are updated for all future issues.
+Issue #3 is complete.

@@ -1,0 +1,113 @@
+# ---------------------------------------------------------------------------
+# ReachInbox Email Scheduler — local development services
+#
+# Services:   PostgreSQL 16, Redis 7, Elasticsearch 8
+# Volumes:    persistent named volumes (data survives container restart)
+# Network:    reachinbox-network (services address each other by name)
+#
+# Usage:
+#   docker compose up -d          # start all services in the background
+#   docker compose down           # stop containers (data volumes kept)
+#   docker compose down -v        # stop and delete all data volumes
+#   docker compose ps             # check service status
+#   docker compose logs -f        # follow all logs
+# ---------------------------------------------------------------------------
+
+services:
+
+  # -------------------------------------------------------------------------
+  # PostgreSQL 16
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: reachinbox-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - reachinbox-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # -------------------------------------------------------------------------
+  # Redis 7
+  # Persistent storage enabled via appendonly aof so jobs survive restarts.
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: reachinbox-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - reachinbox-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # -------------------------------------------------------------------------
+  # Elasticsearch 8
+  # Single-node, security disabled for local development.
+  # xpack.security.enabled=false avoids certificate/credential setup locally.
+  # -------------------------------------------------------------------------
+  elasticsearch:
+    image: elasticsearch:8.14.0
+    container_name: reachinbox-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - cluster.name=reachinbox-cluster
+      - node.name=reachinbox-node
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - reachinbox-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+
+# ---------------------------------------------------------------------------
+# Named volumes — data persists across container restarts
+# ---------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+
+# ---------------------------------------------------------------------------
+# Internal network — services talk to each other by service name
+# e.g. postgres://reachinbox-postgres:5432
+# ---------------------------------------------------------------------------
+networks:
+  reachinbox-network:
+    driver: bridge
