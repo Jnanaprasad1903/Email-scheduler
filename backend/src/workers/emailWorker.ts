@@ -37,8 +37,8 @@ export const emailWorker = new Worker<EmailJobData>(
       return;
     }
 
-    // 3. Rate Limit Check (Abstraction for Issue #9)
-    const allowed = await checkRateLimit(email.campaignId, email.campaign.hourlyLimit);
+    // 3. Rate Limit Check (Issue #9)
+    const allowed = await checkRateLimit(email.campaignId, email.id, email.campaign.hourlyLimit);
     if (!allowed) {
       // Revert to SCHEDULED and throw to retry later
       await prisma.email.update({

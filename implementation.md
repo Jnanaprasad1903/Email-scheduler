@@ -48,7 +48,7 @@ For each significant engineering problem:
 | Transactional outbox | Done |
 | Redis / BullMQ | Not started |
 | Email worker | Done |
-| Rate limiting | Not started |
+| Rate limiting | Done |
 | Elasticsearch | Not started |
 | Slack | Not started |
 | Google OAuth | Not started |
@@ -655,3 +655,49 @@ Introduced a clean `checkRateLimit` abstraction returning a boolean. The actual 
 
 **Result:**  
 Issue #8 is complete. The application now processes queued events and dispatches simulated production emails correctly.
+
+---
+
+### 2026-09-27 — Distributed Email Rate Limiting (Issue #9)
+
+**Problem:**  
+The system must enforce a configurable maximum number of emails sent per hour per campaign (the `hourlyLimit`). Because multiple worker instances (or highly concurrent single instances) can process emails simultaneously, an in-memory counter is insufficient due to race conditions.
+
+**Investigation and approaches considered:**
+
+*Storage Mechanism:*  
+Evaluated PostgreSQL row locks versus Redis. Selected Redis due to its extremely low latency and atomic operation capabilities, which are ideal for distributed rate limiting.
+
+*Algorithm Design:*  
+1. *Fixed Window:* Simplest, but allows bursts at the edges of the window (e.g. sending 100 emails at 1:59 and another 100 at 2:01).  
+2. *Sliding Window:* More complex but enforces a strict rolling limit (no more than X emails in *any* trailing 60-minute window).
+
+Selected **Sliding Window** utilizing a Redis Sorted Set (`ZSET`). The score is the Unix timestamp and the member is the unique `emailId`.
+
+*Concurrency & Atomicity:*  
+Initially considered using an IORedis `pipeline()` to execute `ZREMRANGEBYSCORE`, `ZCARD`, and `ZADD` in sequence. However, in a highly concurrent environment, multiple workers checking `ZCARD` simultaneously before any of them execute `ZADD` would result in race conditions (over-sending).
+To guarantee atomicity, we injected the logic into a custom **Redis Lua script**. Redis executes Lua scripts atomically, ensuring the count check and append operation act as a single, indivisible transaction.
+
+**Decision:**  
+Sliding Window algorithm via a custom Redis Lua script utilizing Sorted Sets (`ZSET`).
+
+**Files created/modified:**
+
+| File | Purpose |
+|---|---|
+| `src/services/rateLimiter.ts` | Implemented atomic Lua script for checking and incrementing rate limits |
+| `src/workers/emailWorker.ts` | Updated rate limiter call to pass the `emailId` for the ZSET member |
+
+**Acceptance criteria:**
+- [x] Redis utilized for centralized, distributed rate limiting
+- [x] Hourly limit strictly enforced per campaign
+- [x] Race conditions prevented via atomic Lua script execution
+- [x] Worker correctly reverts to `SCHEDULED` and triggers backoff on limit hit
+
+**Verification:**
+- Scheduled a campaign with 4 recipients and an `hourlyLimit` of 2.
+- Verified in server logs that exactly 2 emails were delivered (Ethereal preview URLs generated).
+- Verified that the remaining 2 emails immediately threw "Rate limit exceeded" and were pushed into BullMQ's retry queue, confirming the atomic lock works perfectly.
+
+**Result:**  
+Issue #9 is complete. The distributed rate limiter safely restricts the throughput without losing emails.
