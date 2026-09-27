@@ -26,3 +26,18 @@ export interface EmailJobData {
   emailId: string;
   outboxEventId: string;
 }
+
+/** Queue for background Elasticsearch indexing */
+export const searchQueue = new Queue('search', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 2_000 },
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 50 },
+  },
+});
+
+export interface SearchJobData {
+  emailId: string;
+}

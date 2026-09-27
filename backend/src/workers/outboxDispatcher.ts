@@ -1,5 +1,5 @@
 import { prisma } from '../db/prisma.js';
-import { emailQueue, EmailJobData } from '../lib/queue.js';
+import { emailQueue, searchQueue, EmailJobData } from '../lib/queue.js';
 
 const POLL_INTERVAL_MS = 5_000; // poll every 5 seconds
 const BATCH_SIZE = 50;           // claim up to 50 events per poll
@@ -91,6 +91,11 @@ async function dispatchBatch(): Promise<void> {
       await emailQueue.add('send-email', jobData, {
         delay,
         jobId: event.emailId,
+      });
+
+      // Also enqueue an immediate job to index this email into Elasticsearch
+      await searchQueue.add('index-email', { emailId: event.emailId }, {
+        jobId: `search-${event.emailId}`,
       });
 
       // Mark as PROCESSED — the BullMQ job now owns the delivery

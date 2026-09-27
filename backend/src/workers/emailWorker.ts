@@ -1,6 +1,6 @@
 import { Worker, Job, DelayedError } from 'bullmq';
 import { redisConnection } from '../lib/redis.js';
-import { EmailJobData } from '../lib/queue.js';
+import { EmailJobData, searchQueue } from '../lib/queue.js';
 import { prisma } from '../db/prisma.js';
 import { sendEmail } from '../lib/mailer.js';
 import { checkRateLimit } from '../services/rateLimiter.js';
@@ -72,6 +72,8 @@ export const emailWorker = new Worker<EmailJobData>(
           attemptCount: { increment: 1 } 
         },
       });
+
+      await searchQueue.add('index-email', { emailId }, { jobId: `search-sent-${emailId}` });
 
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);

@@ -49,7 +49,7 @@ For each significant engineering problem:
 | Redis / BullMQ | Not started |
 | Email worker | Done |
 | Rate limiting | Done |
-| Elasticsearch | Not started |
+| Elasticsearch | Done |
 | Slack | Not started |
 | Google OAuth | Not started |
 | Frontend | Not started |
@@ -701,3 +701,47 @@ Sliding Window algorithm via a custom Redis Lua script utilizing Sorted Sets (`Z
 
 **Result:**  
 Issue #9 is complete. The distributed rate limiter safely restricts the throughput without losing emails.
+
+---
+
+### 2026-09-27 — Elasticsearch Email Indexing and Search (Issue #10)
+
+**Problem:**  
+The system must be able to index emails into Elasticsearch to provide fast, full-text search capabilities across subject, body, and recipient fields, while maintaining PostgreSQL as the primary source of truth.
+
+**Investigation and approaches considered:**
+
+*Sync Mechanism:*  
+1. *Synchronous API sync:* Pushing to Elasticsearch inside the `POST /schedule` handler. High risk if ES is down.
+2. *Asynchronous via BullMQ:* Because we already use the Transactional Outbox pattern, we can guarantee reliable delivery of events to Elasticsearch by pushing indexing jobs to BullMQ asynchronously.
+
+*Status Updates:*  
+Emails go through multiple states (`SCHEDULED` -> `PROCESSING` -> `SENT`). To keep Elasticsearch up to date with the sent status, the `emailWorker` should also re-index the document upon successfully delivering the email.
+
+**Decision:**  
+Create a dedicated `search` BullMQ queue. Dispatch jobs to it both from the `outboxDispatcher` (for initial indexing) and the `emailWorker` (for status updates). 
+
+**Files created/modified:**
+
+| File | Purpose |
+|---|---|
+| `src/lib/elasticsearch.ts` | Configures the ES v8 client and handles index initialization. |
+| `src/lib/queue.ts` | Added `searchQueue` definition. |
+| `src/workers/searchWorker.ts` | Processes `searchQueue` jobs, pulling the latest email state from Postgres and indexing it. |
+| `src/workers/outboxDispatcher.ts` | Dispatches initial `index-email` job simultaneously with the delay `send-email` job. |
+| `src/workers/emailWorker.ts` | Dispatches follow-up `index-email` job after SMTP delivery completes to sync the `SENT` status. |
+| `src/routes/emails.ts` | Built `GET /api/emails/search?q=...` leveraging `multi_match` across subject, body, and recipient. |
+
+**Acceptance criteria:**
+- [x] Elasticsearch client successfully configured and index created on startup.
+- [x] Initial email indexing is handled asynchronously to prevent slowing down the scheduling API.
+- [x] `SENT` status updates are reflected in Elasticsearch.
+- [x] Dedicated `GET /api/emails/search` endpoint exposes `multi_match` full-text search capability.
+
+**Verification:**
+- Validated `@elastic/elasticsearch` client version compatibility (v8) with the local Docker image.
+- Scheduled a test email. Server logs confirmed BullMQ successfully executed `[elasticsearch] Indexed email ...`.
+- Invoked `GET /api/emails/search?q=Elasticsearch` which successfully returned the exact email document demonstrating a full-text match.
+
+**Result:**  
+Issue #10 is complete. The system now supports robust, eventually-consistent full-text search powered by Elasticsearch.

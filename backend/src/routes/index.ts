@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { campaignRouter } from './campaigns.js';
 import { senderRouter } from './senders.js';
+import { emailRouter } from './emails.js';
 
 export const router = Router();
 
@@ -11,3 +12,4 @@ router.get('/health', (_req, res) => {
 
 router.use('/campaigns', campaignRouter);
 router.use('/senders', senderRouter);
+router.use('/emails', emailRouter);
