@@ -1,15 +1,30 @@
 import { Client } from '@elastic/elasticsearch';
 
-const esUrl = process.env['ELASTICSEARCH_URL'] ?? 'http://localhost:9200';
+const esUrl = process.env['ELASTICSEARCH_URL'];
 
-export const esClient = new Client({
-  node: esUrl,
-});
+// If no ELASTICSEARCH_URL is provided, use a dummy client that silently skips operations
+export const esClient = esUrl 
+  ? new Client({ node: esUrl }) 
+  : ({
+      indices: {
+        exists: async () => false,
+        create: async () => {},
+      },
+      index: async () => {},
+      search: async () => ({
+        hits: { hits: [], total: { value: 0 } }
+      })
+    } as unknown as Client);
 
 /**
  * Initializes the Elasticsearch index with appropriate mappings.
  */
 export async function initializeElasticsearch() {
+  if (!esUrl) {
+    console.log('[elasticsearch] Skipped: No ELASTICSEARCH_URL provided. Search will be disabled.');
+    return;
+  }
+
   const indexName = 'emails';
 
   try {
