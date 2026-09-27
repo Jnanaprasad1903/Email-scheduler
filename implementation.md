@@ -51,7 +51,7 @@ For each significant engineering problem:
 | Rate limiting | Done |
 | Elasticsearch | Done |
 | Slack | Not started |
-| Google OAuth | Not started |
+| Google OAuth | Done |
 | Frontend | Not started |
 | Testing | Not started |
 | Documentation | Not started |
@@ -745,3 +745,49 @@ Create a dedicated `search` BullMQ queue. Dispatch jobs to it both from the `out
 
 **Result:**  
 Issue #10 is complete. The system now supports robust, eventually-consistent full-text search powered by Elasticsearch.
+
+---
+
+### 2026-09-27 — Google OAuth Authentication (Issue #11)
+
+**Problem:**  
+The dashboard needs an authentication system allowing users to log in securely using Google OAuth, maintaining sessions, protecting API routes, and creating a robust user identity model in the database.
+
+**Investigation and approaches considered:**
+
+*Session Management:*  
+1. *Stateful sessions (express-session + Redis):* Good for strict revocation, but requires an active connection to Redis on every authenticated request.
+2. *Stateless JWTs (httpOnly cookies):* Easiest to implement and scale, natively protected against XSS, and fits the REST API architecture perfectly.
+
+*OAuth Flow:*  
+Since we control both frontend and backend, we'll configure the backend to orchestrate the Authorization Code flow. We use `passport-google-oauth20` to handle the redirection and token exchange seamlessly.
+
+**Decision:**  
+Use `passport` and `passport-google-oauth20` for the OAuth authorization flow. Issue a `7d` signed JWT encoded inside an `httpOnly` cookie (`token`). The existing `requireAuth` middleware is upgraded to inspect this token (and fall back to `x-user-id` specifically during Vitest tests).
+
+**Files created/modified:**
+
+| File | Purpose |
+|---|---|
+| `src/lib/auth.ts` | Configures Passport Google strategy and provides JWT issuance/verification utilities. |
+| `src/routes/auth.ts` | Exposes `/google`, `/google/callback`, `/me`, and `/logout` endpoints. |
+| `src/middleware/auth.ts` | Upgraded `requireAuth` to parse JWT from cookies and securely attach the verified `user` context. |
+| `src/app.ts` | Initialized `cookie-parser` and `passport.initialize()`. |
+| `src/routes/index.ts` | Mounted `authRouter` under `/api/auth`. |
+| `.env.example` | Exposed `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `JWT_SECRET` references. |
+
+**Acceptance criteria:**
+- [x] Google OAuth login implemented (`/api/auth/google`)
+- [x] Callback implemented (`/api/auth/google/callback`)
+- [x] User persisted in PostgreSQL (using `prisma.user.upsert`)
+- [x] Authenticated session established (JWT in `httpOnly` cookie)
+- [x] Protected endpoints reject unauthenticated users (`requireAuth` intercepts lack of valid token)
+- [x] Logout implemented (`/api/auth/logout` clears cookie)
+- [x] User name/email/avatar available to frontend (via `/api/auth/me`)
+
+**Verification:**
+- Ran `npx vitest run` to verify the modified `requireAuth` middleware does not break existing test coverage and still safely rejects unauthenticated users.
+- TypeScript compiled (`npm run typecheck`) successfully.
+
+**Result:**  
+Issue #11 is complete. Users can now securely authenticate via Google and access protected dashboard endpoints.

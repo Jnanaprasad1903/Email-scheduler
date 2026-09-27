@@ -1,6 +1,8 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import passport from 'passport';
 import { router } from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -19,6 +21,8 @@ app.use(
 
 // Parse JSON request bodies
 app.use(express.json());
+app.use(cookieParser());
+app.use(passport.initialize());
 
 // All API routes under /api
 app.use('/api', router);
