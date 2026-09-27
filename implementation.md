@@ -697,7 +697,7 @@ Sliding Window algorithm via a custom Redis Lua script utilizing Sorted Sets (`Z
 **Verification:**
 - Scheduled a campaign with 4 recipients and an `hourlyLimit` of 2.
 - Verified in server logs that exactly 2 emails were delivered (Ethereal preview URLs generated).
-- Verified that the remaining 2 emails immediately threw "Rate limit exceeded" and were pushed into BullMQ's retry queue, confirming the atomic lock works perfectly.
+- Verified that the remaining 2 emails calculated the exact time the next window opens up, and utilized BullMQ's `job.moveToDelayed()` alongside `DelayedError` to accurately sleep the job until exactly that timestamp, completely avoiding retry storms!
 
 **Result:**  
 Issue #9 is complete. The distributed rate limiter safely restricts the throughput without losing emails.

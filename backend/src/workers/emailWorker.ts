@@ -1,4 +1,4 @@
-import { Worker, Job } from 'bullmq';
+import { Worker, Job, DelayedError } from 'bullmq';
 import { redisConnection } from '../lib/redis.js';
 import { EmailJobData } from '../lib/queue.js';
 import { prisma } from '../db/prisma.js';
@@ -11,8 +11,6 @@ export const emailWorker = new Worker<EmailJobData>(
     const { emailId } = job.data;
     
     // 1. Idempotent Atomic Lock: Transition from SCHEDULED to PROCESSING.
-    // If the email is already in SENT, FAILED, CANCELLED, or PROCESSING,
-    // this updateMany will affect 0 rows, and we can safely skip.
     const lockResult = await prisma.email.updateMany({
       where: { id: emailId, status: 'SCHEDULED' },
       data: { status: 'PROCESSING' },
@@ -38,15 +36,21 @@ export const emailWorker = new Worker<EmailJobData>(
     }
 
     // 3. Rate Limit Check (Issue #9)
-    const allowed = await checkRateLimit(email.campaignId, email.id, email.campaign.hourlyLimit);
-    if (!allowed) {
-      // Revert to SCHEDULED and throw to retry later
+    const rateLimit = await checkRateLimit(email.campaignId, email.id, email.campaign.hourlyLimit);
+    if (!rateLimit.allowed) {
+      // Revert to SCHEDULED since we haven't sent it yet
       await prisma.email.update({
         where: { id: emailId },
         data: { status: 'SCHEDULED' },
       });
-      // Throwing triggers BullMQ's exponential backoff, delaying the retry.
-      throw new Error(`Rate limit exceeded for campaign ${email.campaignId}`);
+      
+      console.log(`[worker] Rate limit hit for campaign ${email.campaignId}. Rescheduling to ${new Date(rateLimit.nextAvailableTime).toISOString()}`);
+      
+      // Move the job to the delayed queue exactly until the next slot opens up
+      await job.moveToDelayed(rateLimit.nextAvailableTime, job.token as string);
+      
+      // Tell BullMQ to halt processing for this job without failing it
+      throw new DelayedError();
     }
 
     // 4. Attempt Ethereal SMTP Delivery
