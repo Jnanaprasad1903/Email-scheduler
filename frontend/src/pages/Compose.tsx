@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Clock, Upload, Paperclip, Send } from 'lucide-react';
+import { ArrowLeft, Clock, Upload, Paperclip } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
