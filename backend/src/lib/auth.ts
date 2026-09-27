@@ -40,6 +40,14 @@ passport.use(
             email,
             name,
             avatarUrl,
+            senders: {
+              create: [
+                {
+                  email,
+                  name,
+                }
+              ]
+            }
           },
         });
 

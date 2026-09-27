@@ -13,7 +13,14 @@ const transporter = nodemailer.createTransport({
  * Send an email using Ethereal SMTP.
  * Returns the message preview URL.
  */
-export async function sendEmail(to: string, subject: string, body: string, senderEmail: string, senderName: string): Promise<string | false> {
+export async function sendEmail(
+  to: string, 
+  subject: string, 
+  body: string, 
+  senderEmail: string, 
+  senderName: string,
+  attachments?: { name: string, content: string }[]
+): Promise<string | false> {
   const from = senderName ? `"${senderName}" <${senderEmail}>` : senderEmail;
   
   const info = await transporter.sendMail({
@@ -21,6 +28,11 @@ export async function sendEmail(to: string, subject: string, body: string, sende
     to,
     subject,
     text: body, // For this take-home, we just use plain text. Could be HTML.
+    attachments: attachments ? attachments.map(a => ({
+      filename: a.name,
+      content: a.content,
+      encoding: 'base64'
+    })) : undefined
   });
 
   const previewUrl = nodemailer.getTestMessageUrl(info);

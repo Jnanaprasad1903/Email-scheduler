@@ -24,6 +24,11 @@ export const scheduleRequestSchema = z.object({
 
   // maximum emails to send in any rolling hour window
   hourlyLimit: z.number().int().min(1, 'hourlyLimit must be at least 1'),
+
+  attachments: z.array(z.object({
+    name: z.string(),
+    content: z.string() // base64
+  })).optional()
 });
 
 export type ScheduleRequest = z.infer<typeof scheduleRequestSchema>;

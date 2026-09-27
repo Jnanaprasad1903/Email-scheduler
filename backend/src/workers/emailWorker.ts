@@ -21,7 +21,6 @@ export const emailWorker = new Worker<EmailJobData>(
       return;
     }
 
-    // 2. Fetch full email details for sending
     const email = await prisma.email.findUnique({
       where: { id: emailId },
       include: { 
@@ -34,6 +33,10 @@ export const emailWorker = new Worker<EmailJobData>(
       console.warn(`[worker] Email ${emailId} record deleted after lock.`);
       return;
     }
+
+    // Fetch attachments via raw query to bypass Prisma client schema cache
+    const campaignRaw = await prisma.$queryRaw<{attachments: any}[]>`SELECT attachments FROM campaigns WHERE id = ${email.campaignId}::uuid`;
+    const attachments = campaignRaw[0]?.attachments;
 
     // 3. Rate Limit Check (Issue #9)
     const rateLimit = await checkRateLimit(email.campaignId, email.id, email.campaign.hourlyLimit);
@@ -55,12 +58,13 @@ export const emailWorker = new Worker<EmailJobData>(
 
     // 4. Attempt Ethereal SMTP Delivery
     try {
-      await sendEmail(
+      const previewUrl = await sendEmail(
         email.recipient, 
         email.subject, 
         email.body, 
         email.sender.email, 
-        email.sender.name || ''
+        email.sender.name || '',
+        attachments || undefined
       );
 
       // 5. Update status to SENT
@@ -69,9 +73,25 @@ export const emailWorker = new Worker<EmailJobData>(
         data: { 
           status: 'SENT', 
           sentAt: new Date(),
-          attemptCount: { increment: 1 } 
-        },
+          attemptCount: { increment: 1 },
+          previewUrl: previewUrl ? previewUrl : null
+        } as any, // Using 'any' since prisma client generation may be locked by dev server
       });
+
+      // Check if all emails in this campaign are done
+      const pendingCount = await prisma.email.count({
+        where: {
+          campaignId: email.campaignId,
+          status: { in: ['SCHEDULED', 'PROCESSING'] },
+        }
+      });
+
+      if (pendingCount === 0) {
+        await prisma.campaign.update({
+          where: { id: email.campaignId },
+          data: { status: 'COMPLETED' },
+        });
+      }
 
       await searchQueue.add('index-email', { emailId }, { jobId: `search-sent-${emailId}` });
 
@@ -89,6 +109,9 @@ export const emailWorker = new Worker<EmailJobData>(
           attemptCount: { increment: 1 } 
         },
       });
+
+      // Check if all emails in this campaign are done (even if this one failed max retries, but we just revert to SCHEDULED here so it will retry).
+      // Wait, if it reverts to SCHEDULED, pendingCount > 0, so campaign stays PROCESSING.
 
       // Re-throw so BullMQ registers a job failure and triggers retry backoff
       throw err;

@@ -70,8 +70,9 @@ export async function scheduleCampaign(userId: string, data: ScheduleRequest) {
         startAt: data.startAt,
         delayMs: data.delayMs,
         hourlyLimit: data.hourlyLimit,
+        attachments: data.attachments ? (data.attachments as any) : null,
         status: 'SCHEDULED',
-      },
+      } as any,
     });
 
     const emailRecords = buildEmailRecords(
