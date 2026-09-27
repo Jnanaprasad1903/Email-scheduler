@@ -49,8 +49,7 @@ emailRouter.get(
         results: hits,
       });
     } catch (err) {
-      console.error('[emails/search] Error:', err);
-      res.status(500).json({ error: err instanceof Error ? err.stack : String(err) });
+      next(err);
     }
   }
 );
