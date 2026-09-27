@@ -20,10 +20,10 @@ export const scheduleRequestSchema = z.object({
   startAt: z.coerce.date(),
 
   // milliseconds between individual sends (0 = no forced delay)
-  delayMs: z.number().int().min(0, 'delayMs must be a non-negative integer'),
+  delayMs: z.number().int().min(0, 'delayMs must be a non-negative integer').optional(),
 
   // maximum emails to send in any rolling hour window
-  hourlyLimit: z.number().int().min(1, 'hourlyLimit must be at least 1'),
+  hourlyLimit: z.number().int().min(1, 'hourlyLimit must be at least 1').optional(),
 
   attachments: z.array(z.object({
     name: z.string(),

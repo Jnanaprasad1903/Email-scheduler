@@ -22,8 +22,7 @@ export default function Compose() {
   const [toInput, setToInput] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
-  const [hourlyLimit, setHourlyLimit] = useState('');
-  const [delay, setDelay] = useState('');
+
   const [customTime, setCustomTime] = useState('');
   const [attachments, setAttachments] = useState<{name: string, content: string}[]>([]);
 
@@ -112,8 +111,7 @@ export default function Compose() {
         recipients: finalRecipients,
         subject,
         body,
-        delayMs: delay ? parseInt(delay) * 1000 : 10000,
-        hourlyLimit: hourlyLimit ? parseInt(hourlyLimit) : 100,
+
         startAt: scheduleTime || new Date().toISOString(),
         attachments: attachments.length > 0 ? attachments : undefined
       }, { withCredentials: true });
@@ -243,31 +241,7 @@ export default function Compose() {
               />
             </div>
 
-            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-              <div />
-              <div className="flex gap-6 items-center">
-                <div className="flex items-center gap-3">
-                  <label className="text-xs font-medium text-gray-500">Delay between 2 emails (s)</label>
-                  <input 
-                    type="number" 
-                    placeholder="10" 
-                    value={delay}
-                    onChange={(e) => setDelay(e.target.value)}
-                    className="w-16 bg-[#F5F7F5] border-none rounded-lg px-3 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30" 
-                  />
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="text-xs font-medium text-gray-500">Hourly Limit</label>
-                  <input
-                    type="number"
-                    placeholder="00"
-                    value={hourlyLimit}
-                    onChange={(e) => setHourlyLimit(e.target.value)}
-                    className="w-16 bg-[#F5F7F5] border-none rounded-lg px-3 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  />
-                </div>
-              </div>
-            </div>
+
 
             {error && <div className="text-red-500 text-sm">{error}</div>}
 

@@ -47,7 +47,8 @@ export const emailWorker = new Worker<EmailJobData>(
     const slackWebhookUrl = campaignRaw[0]?.slackWebhookUrl;
 
     // 3. Rate Limit Check (Issue #9)
-    const rateLimit = await checkRateLimit(email.campaignId, email.id, email.campaign.hourlyLimit);
+    const hourlyLimit = Number(process.env['MAX_EMAILS_PER_HOUR'] ?? 50);
+    const rateLimit = await checkRateLimit(email.sender.email, email.id);
     if (!rateLimit.allowed) {
       // Revert to SCHEDULED since we haven't sent it yet
       await prisma.email.update({
@@ -58,7 +59,7 @@ export const emailWorker = new Worker<EmailJobData>(
       console.log(`[worker] Rate limit hit for campaign ${email.campaignId}. Rescheduling to ${new Date(rateLimit.nextAvailableTime).toISOString()}`);
       
       // Notify Slack asynchronously (fire and forget)
-      notifyRateLimitReached(slackWebhookUrl, email.campaignId, campaignSubject, email.campaign.hourlyLimit)
+      notifyRateLimitReached(slackWebhookUrl, email.sender.email, campaignSubject, hourlyLimit)
         .catch(err => console.error('[worker] Slack notification error:', err));
 
       // Move the job to the delayed queue exactly until the next slot opens up

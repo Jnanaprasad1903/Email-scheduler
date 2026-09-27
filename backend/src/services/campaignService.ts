@@ -27,8 +27,9 @@ function buildEmailRecords(
   subject: string,
   body: string,
   startAt: Date,
-  delayMs: number,
+  _ignoredDelayMs: number,
 ) {
+  const delayMs = Number(process.env['EMAIL_DELAY_SECONDS'] ?? 10) * 1000;
   return recipients.map((recipient, index) => ({
     campaignId,
     senderId,
@@ -68,8 +69,8 @@ export async function scheduleCampaign(userId: string, data: ScheduleRequest) {
         subject: data.subject,
         body: data.body,
         startAt: data.startAt,
-        delayMs: data.delayMs,
-        hourlyLimit: data.hourlyLimit,
+        delayMs: Number(process.env['EMAIL_DELAY_SECONDS'] ?? 10) * 1000,
+        hourlyLimit: Number(process.env['MAX_EMAILS_PER_HOUR'] ?? 50),
         attachments: data.attachments ? (data.attachments as any) : null,
         status: 'SCHEDULED',
       } as any,

@@ -2,13 +2,13 @@ import { redisConnection } from '../lib/redis.js';
 
 export async function notifyRateLimitReached(
   slackWebhookUrl: string | null | undefined,
-  campaignId: string,
+  senderEmail: string,
   campaignSubject: string,
   limit: number
 ) {
   if (!slackWebhookUrl) return;
 
-  const cacheKey = `campaign:${campaignId}:slack_notified`;
+  const cacheKey = `sender:${senderEmail}:slack_notified`;
   const alreadyNotified = await redisConnection.get(cacheKey);
 
   if (alreadyNotified) {
@@ -19,7 +19,7 @@ export async function notifyRateLimitReached(
   await redisConnection.set(cacheKey, 'true', 'EX', 3600);
 
   const payload = {
-    text: `⚠️ *Rate Limit Reached*\nYour campaign *"${campaignSubject}"* has hit its configured hourly limit of *${limit} emails*.\n\nSubsequent emails have been automatically delayed and will resume when the next hour rolls over.`,
+    text: `⚠️ *Rate Limit Reached*\nSender *${senderEmail}* has hit the configured hourly limit of *${limit} emails* while sending campaign "${campaignSubject}".\n\nSubsequent emails have been automatically delayed and will resume when the next hour rolls over.`,
   };
 
   try {
@@ -30,9 +30,9 @@ export async function notifyRateLimitReached(
       },
       body: JSON.stringify(payload),
     });
-    console.log(`[slack] Sent rate limit notification to Slack for campaign ${campaignId}`);
+    console.log(`[slack] Sent rate limit notification to Slack for sender ${senderEmail}`);
   } catch (err) {
-    console.error(`[slack] Failed to send Slack notification for campaign ${campaignId}:`, err);
+    console.error(`[slack] Failed to send Slack notification for sender ${senderEmail}:`, err);
   }
 }
 

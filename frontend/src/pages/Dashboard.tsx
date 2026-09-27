@@ -8,6 +8,7 @@ interface User {
   name: string;
   email: string;
   avatarUrl: string;
+  slackTeamName?: string | null;
 }
 
 export default function Dashboard() {
@@ -54,6 +55,16 @@ export default function Dashboard() {
     axios.post('http://localhost:3000/api/auth/logout', {}, { withCredentials: true })
       .then(() => {
         window.location.href = '/login';
+      })
+      .catch(err => console.error(err));
+  };
+
+  const handleDisconnectSlack = () => {
+    axios.post('http://localhost:3000/api/slack/disconnect', {}, { withCredentials: true })
+      .then(() => {
+        if (user) {
+          setUser({ ...user, slackTeamName: null });
+        }
       })
       .catch(err => console.error(err));
   };
@@ -120,10 +131,26 @@ export default function Dashboard() {
 
           <Link 
             to="/compose"
-            className="w-full flex items-center justify-center gap-2 border border-primary text-primary font-medium py-2 rounded-lg mb-8 hover:bg-primary/5 transition-colors"
+            className="w-full flex items-center justify-center gap-2 border border-primary text-primary font-medium py-2 rounded-lg mb-4 hover:bg-primary/5 transition-colors"
           >
             Compose
           </Link>
+
+          {user?.slackTeamName ? (
+            <button
+              onClick={handleDisconnectSlack}
+              className="w-full flex items-center justify-center gap-2 border border-[#4A154B] text-[#4A154B] font-medium py-2 rounded-lg mb-8 hover:bg-[#4A154B]/5 transition-colors text-sm"
+            >
+              Disconnect Slack ({user.slackTeamName})
+            </button>
+          ) : (
+            <a
+              href="http://localhost:3000/api/slack/connect"
+              className="w-full flex items-center justify-center gap-2 bg-[#4A154B] text-white font-medium py-2 rounded-lg mb-8 hover:bg-[#4A154B]/90 transition-colors text-sm"
+            >
+              Connect Slack
+            </a>
+          )}
 
           <nav className="flex flex-col gap-1">
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Core</div>
