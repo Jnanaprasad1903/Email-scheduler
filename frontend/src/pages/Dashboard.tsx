@@ -39,6 +39,8 @@ export default function Dashboard() {
           status: c.status, // SCHEDULED, RUNNING, COMPLETED, etc.
           time: new Date(c.startAt).toLocaleString(),
           preview: c.body?.substring(0, 50) + '...',
+          delayMs: c.delayMs,
+          hourlyLimit: c.hourlyLimit,
           isStarred: false
         }));
         setEmails(formattedEmails);
