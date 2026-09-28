@@ -23,8 +23,8 @@ export default function Dashboard() {
     // We expect the JWT cookie to handle auth seamlessly
     // Fetch user and emails
     Promise.all([
-      axios.get('http://localhost:3000/api/auth/me', { withCredentials: true }),
-      axios.get('http://localhost:3000/api/campaigns', { withCredentials: true }) // Adjust depending on actual API structure for listing emails
+      axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/auth/me`, { withCredentials: true }),
+      axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/campaigns`, { withCredentials: true }) // Adjust depending on actual API structure for listing emails
     ])
       .then(([userRes, campaignsRes]) => {
         setUser(userRes.data.user);
@@ -52,7 +52,7 @@ export default function Dashboard() {
   }, []);
 
   const handleLogout = () => {
-    axios.post('http://localhost:3000/api/auth/logout', {}, { withCredentials: true })
+    axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/auth/logout`, {}, { withCredentials: true })
       .then(() => {
         window.location.href = '/login';
       })
@@ -60,7 +60,7 @@ export default function Dashboard() {
   };
 
   const handleDisconnectSlack = () => {
-    axios.post('http://localhost:3000/api/slack/disconnect', {}, { withCredentials: true })
+    axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/slack/disconnect`, {}, { withCredentials: true })
       .then(() => {
         if (user) {
           setUser({ ...user, slackTeamName: null });
@@ -145,7 +145,7 @@ export default function Dashboard() {
             </button>
           ) : (
             <a
-              href="http://localhost:3000/api/slack/connect"
+              href={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/slack/connect`}
               className="w-full flex items-center justify-center gap-2 bg-[#4A154B] text-white font-medium py-2 rounded-lg mb-8 hover:bg-[#4A154B]/90 transition-colors text-sm"
             >
               Connect Slack

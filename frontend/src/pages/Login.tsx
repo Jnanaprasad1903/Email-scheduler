@@ -13,7 +13,7 @@ export default function Login() {
   const navigate = useNavigate();
 
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:3000/api/auth/google';
+    window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/auth/google`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,7 +25,7 @@ export default function Login() {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
       const payload = isLogin ? { email, password } : { email, password, name };
       
-      const response = await axios.post(`http://localhost:3000${endpoint}`, payload, {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${endpoint}`, payload, {
         withCredentials: true,
       });
 

@@ -10,7 +10,7 @@ export default function CampaignDetails() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    axios.get(`http://localhost:3000/api/campaigns/${id}`, { withCredentials: true })
+    axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/campaigns/${id}`, { withCredentials: true })
       .then(res => {
         setCampaign(res.data);
       })

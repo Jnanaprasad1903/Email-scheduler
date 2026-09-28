@@ -28,7 +28,7 @@ export default function Compose() {
 
   useEffect(() => {
     // Fetch senders from backend
-    axios.get('http://localhost:3000/api/senders', { withCredentials: true })
+    axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/senders`, { withCredentials: true })
       .then(res => {
         setSenders(res.data);
         if (res.data.length > 0) setSelectedSenderId(res.data[0].id);
@@ -106,7 +106,7 @@ export default function Compose() {
     setError('');
     setLoading(true);
     try {
-      await axios.post('http://localhost:3000/api/campaigns/schedule', {
+      await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/campaigns/schedule`, {
         senderId: selectedSenderId,
         recipients: finalRecipients,
         subject,
