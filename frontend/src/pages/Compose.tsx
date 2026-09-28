@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Clock, Upload, Paperclip } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Clock, Upload, Paperclip, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Quote, Link2, Image, Code } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -22,6 +22,33 @@ export default function Compose() {
   const [toInput, setToInput] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [activeFormats, setActiveFormats] = useState<string[]>([]);
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const formats = ['bold', 'italic', 'underline', 'justifyLeft', 'justifyCenter', 'justifyRight', 'insertUnorderedList', 'insertOrderedList'];
+      const active = formats.filter(format => {
+        try { return document.queryCommandState(format); } catch (e) { return false; }
+      });
+      try {
+        const block = document.queryCommandValue('formatBlock');
+        if (block?.toLowerCase() === 'h1') active.push('h1');
+        if (block?.toLowerCase() === 'blockquote') active.push('blockquote');
+      } catch (e) {}
+      setActiveFormats(active);
+    };
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, []);
+
+  const formatText = (command: string, value: string | undefined = undefined) => {
+    document.execCommand(command, false, value);
+    if (editorRef.current) {
+      setBody(editorRef.current.innerHTML);
+      editorRef.current.focus();
+    }
+  };
 
   const [customTime, setCustomTime] = useState('');
   const [delaySeconds, setDelaySeconds] = useState<string>('');
@@ -192,20 +219,20 @@ export default function Compose() {
         <div className="w-full max-w-4xl bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
           <div className="p-6 space-y-6 flex-1">
 
-            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-              <label className="text-sm font-medium text-gray-500 text-right">From</label>
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-500 w-20 text-left">From</label>
               <select
                 value={selectedSenderId}
                 onChange={(e) => setSelectedSenderId(e.target.value)}
-                className="w-fit bg-[#F5F7F5] border-none rounded-lg px-4 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                className="w-fit bg-[#F5F7F5] border-none rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary/30"
               >
                 {senders.map(s => <option key={s.id} value={s.id}>{s.email}</option>)}
               </select>
             </div>
 
-            <div className="grid grid-cols-[100px_1fr] items-start gap-4">
-              <label className="text-sm font-medium text-gray-500 text-right mt-2">To</label>
-              <div className="flex flex-col gap-2">
+            <div className="flex items-start gap-4">
+              <label className="text-sm font-medium text-gray-500 w-20 text-left mt-2">To</label>
+              <div className="flex-1 flex flex-col gap-2">
                 <div className="flex gap-2 border-b border-gray-200 pb-1 flex-wrap items-center max-h-32 overflow-y-auto">
                   {recipients.slice(0, 5).map(email => (
                     <span key={email} className="bg-[#E0F8EA] text-primary text-xs px-2 py-1 rounded-md flex items-center gap-1">
@@ -224,7 +251,7 @@ export default function Compose() {
                     value={toInput}
                     onChange={(e) => setToInput(e.target.value)}
                     onKeyDown={handleManualAdd}
-                    className="flex-1 bg-transparent min-w-[150px] px-2 py-1 text-sm text-gray-700 focus:outline-none placeholder-gray-300"
+                    className="flex-1 bg-transparent min-w-[150px] px-1 py-1 text-sm text-gray-700 focus:outline-none placeholder-gray-300"
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -245,20 +272,21 @@ export default function Compose() {
               </div>
             </div>
 
-            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-              <label className="text-sm font-medium text-gray-500 text-right">Subject</label>
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-500 w-20 text-left">Subject</label>
               <input
                 type="text"
                 placeholder="Subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="flex-1 bg-transparent border-b border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:border-primary placeholder-gray-300"
+                className="flex-1 bg-transparent border-b border-gray-200 px-1 py-1 text-sm text-gray-700 focus:outline-none focus:border-primary placeholder-gray-300"
               />
             </div>
 
-            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-              <div className="col-span-2 flex items-center pl-4 gap-6 mt-2">
-                <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-20"></div>
+              <div className="flex-1 flex items-center gap-8 mt-2">
+                <div className="flex items-center gap-3">
                   <label className="text-sm font-medium text-gray-700">Delay between 2 emails</label>
                   <input
                     type="number"
@@ -301,20 +329,62 @@ export default function Compose() {
             )}
 
             <div className="mt-8 border border-gray-200 rounded-xl overflow-hidden flex flex-col min-h-[300px]">
-              {/* Rich Text Toolbar Mockup */}
-              <div className="bg-[#F5F7F5] border-b border-gray-200 px-4 py-2 flex items-center gap-4 text-gray-500">
-                <button className="hover:text-gray-800"><span className="font-serif italic font-bold">I</span></button>
-                <button className="hover:text-gray-800"><span className="font-serif font-bold underline">U</span></button>
-                <button className="hover:text-gray-800"><span className="font-serif font-bold">B</span></button>
-                <div className="w-px h-4 bg-gray-300"></div>
-                <button className="hover:text-gray-800 text-sm font-medium">Tt</button>
+              <div className="bg-[#F5F7F5] border-b border-gray-200 px-4 py-2 flex items-center gap-3 text-gray-600 overflow-x-auto">
+                <div className="flex items-center gap-2 border-r border-gray-300 pr-3">
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); formatText('italic'); }} className={`hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded ${activeFormats.includes('italic') ? 'bg-gray-200 text-gray-900' : ''}`}><span className="font-serif italic font-bold">I</span></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); formatText('underline'); }} className={`hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded ${activeFormats.includes('underline') ? 'bg-gray-200 text-gray-900' : ''}`}><span className="font-serif font-bold underline">U</span></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); formatText('bold'); }} className={`hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded ${activeFormats.includes('bold') ? 'bg-gray-200 text-gray-900' : ''}`}><span className="font-serif font-bold">B</span></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); formatText('formatBlock', 'H1'); }} className={`hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded text-sm font-medium ${activeFormats.includes('h1') ? 'bg-gray-200 text-gray-900' : ''}`}>Tt</button>
+                </div>
+                <div className="flex items-center gap-2 border-r border-gray-300 pr-3">
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); formatText('justifyLeft'); }} className={`hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded ${activeFormats.includes('justifyLeft') ? 'bg-gray-200 text-gray-900' : ''}`}><AlignLeft className="w-4 h-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); formatText('justifyCenter'); }} className={`hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded ${activeFormats.includes('justifyCenter') ? 'bg-gray-200 text-gray-900' : ''}`}><AlignCenter className="w-4 h-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); formatText('justifyRight'); }} className={`hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded ${activeFormats.includes('justifyRight') ? 'bg-gray-200 text-gray-900' : ''}`}><AlignRight className="w-4 h-4" /></button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); formatText('insertUnorderedList'); }} className={`hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded ${activeFormats.includes('insertUnorderedList') ? 'bg-gray-200 text-gray-900' : ''}`}><List className="w-4 h-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); formatText('insertOrderedList'); }} className={`hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded ${activeFormats.includes('insertOrderedList') ? 'bg-gray-200 text-gray-900' : ''}`}><ListOrdered className="w-4 h-4" /></button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); formatText('formatBlock', 'BLOCKQUOTE'); }} className={`hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded ${activeFormats.includes('blockquote') ? 'bg-gray-200 text-gray-900' : ''}`}><Quote className="w-4 h-4" /></button>
+                  <button type="button" onMouseDown={(e) => { 
+                    e.preventDefault(); 
+                    // Save selection before prompt steals focus
+                    const selection = window.getSelection();
+                    const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                    
+                    const url = prompt('Enter image URL:'); 
+                    if (url) {
+                      editorRef.current?.focus();
+                      if (range && selection) {
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                      }
+                      document.execCommand('insertImage', false, url);
+                      if (editorRef.current) setBody(editorRef.current.innerHTML);
+                    }
+                  }} className="hover:text-gray-900 transition-colors w-7 h-7 flex items-center justify-center rounded"><Image className="w-4 h-4" /></button>
+                </div>
               </div>
-              <textarea
-                placeholder="Type Your Reply..."
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                className="flex-1 w-full p-4 resize-none focus:outline-none text-gray-700 placeholder-gray-300"
+              <div
+                ref={editorRef}
+                contentEditable
+                onInput={(e) => setBody(e.currentTarget.innerHTML)}
+                className="flex-1 w-full p-4 focus:outline-none text-gray-700 text-sm leading-relaxed overflow-y-auto editor-content"
+                style={{ minHeight: '250px' }}
+                data-placeholder="Type Your Reply (Visually Format Text)..."
               />
+              <style>{`
+                .editor-content ul { list-style-type: disc; margin-left: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+                .editor-content ol { list-style-type: decimal; margin-left: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+                .editor-content blockquote { border-left: 4px solid #e5e7eb; padding-left: 1rem; color: #6b7280; font-style: italic; }
+                .editor-content img { max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0; }
+                .editor-content h1 { font-size: 1.5rem; font-weight: bold; margin-bottom: 0.5rem; }
+                [contentEditable]:empty:before {
+                  content: attr(data-placeholder);
+                  color: #d1d5db;
+                  pointer-events: none;
+                  display: block;
+                }
+              `}</style>
             </div>
 
           </div>
