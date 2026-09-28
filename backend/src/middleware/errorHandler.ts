@@ -16,7 +16,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   // Zod validation errors → 400 with field-level detail
   if (err instanceof ZodError) {
     res.status(400).json({
-      error: 'Validation failed',
+      error: 'Please Enter Positive number',
       issues: err.issues.map((issue) => ({
         path: issue.path.join('.'),
         message: issue.message,

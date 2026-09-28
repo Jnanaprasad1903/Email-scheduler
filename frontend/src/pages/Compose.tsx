@@ -26,7 +26,7 @@ export default function Compose() {
   const [customTime, setCustomTime] = useState('');
   const [delaySeconds, setDelaySeconds] = useState<string>('');
   const [hourlyLimit, setHourlyLimit] = useState<string>('');
-  const [attachments, setAttachments] = useState<{name: string, content: string}[]>([]);
+  const [attachments, setAttachments] = useState<{ name: string, content: string }[]>([]);
 
   useEffect(() => {
     // Fetch senders from backend
@@ -62,7 +62,7 @@ export default function Compose() {
       const text = event.target?.result as string;
       // Parse emails using a more robust regex
       const matches = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
-      
+
       if (matches.length === 0) {
         alert('No valid email addresses found in the file!');
         return;
@@ -163,8 +163,8 @@ export default function Compose() {
                 <div className="p-2 space-y-1">
                   <label className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg flex flex-col gap-1 cursor-pointer">
                     <span className="font-medium text-gray-700 flex items-center justify-between">Pick custom time <Clock className="w-4 h-4" /></span>
-                    <input 
-                      type="datetime-local" 
+                    <input
+                      type="datetime-local"
                       value={customTime}
                       onChange={(e) => setCustomTime(e.target.value)}
                       className="w-full bg-transparent outline-none cursor-pointer mt-1"
@@ -206,13 +206,18 @@ export default function Compose() {
             <div className="grid grid-cols-[100px_1fr] items-start gap-4">
               <label className="text-sm font-medium text-gray-500 text-right mt-2">To</label>
               <div className="flex flex-col gap-2">
-                <div className="flex gap-2 border-b border-gray-200 pb-1 flex-wrap items-center">
-                  {recipients.map(email => (
+                <div className="flex gap-2 border-b border-gray-200 pb-1 flex-wrap items-center max-h-32 overflow-y-auto">
+                  {recipients.slice(0, 5).map(email => (
                     <span key={email} className="bg-[#E0F8EA] text-primary text-xs px-2 py-1 rounded-md flex items-center gap-1">
                       {email}
                       <button onClick={() => removeRecipient(email)} className="hover:text-primary-hover">&times;</button>
                     </span>
                   ))}
+                  {recipients.length > 5 && (
+                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-md flex items-center gap-1 font-medium">
+                      +{recipients.length - 5} more
+                    </span>
+                  )}
                   <input
                     type="text"
                     placeholder={recipients.length === 0 ? "recipient@example.com (press Enter)" : "Add more..."}
@@ -223,7 +228,14 @@ export default function Compose() {
                   />
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">{recipients.length} recipient{recipients.length !== 1 && 's'} parsed</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">{recipients.length} recipient{recipients.length !== 1 && 's'} parsed</span>
+                    {recipients.length > 0 && (
+                      <button onClick={() => setRecipients([])} className="text-xs text-red-400 hover:text-red-500 font-medium">
+                        Clear All
+                      </button>
+                    )}
+                  </div>
                   <label className="flex items-center gap-2 text-primary hover:text-primary-hover text-sm font-medium px-3 py-1 cursor-pointer">
                     <Upload className="w-4 h-4" />
                     Upload List (CSV/TXT)
@@ -277,7 +289,7 @@ export default function Compose() {
                   <div key={i} className="flex items-center gap-2 bg-gray-100 text-gray-700 text-xs px-3 py-1.5 rounded-full shadow-sm border border-gray-200">
                     <Paperclip className="w-3.5 h-3.5 text-gray-400" />
                     <span className="font-medium max-w-[200px] truncate">{att.name}</span>
-                    <button 
+                    <button
                       onClick={() => setAttachments(attachments.filter((_, idx) => idx !== i))}
                       className="ml-1 text-gray-400 hover:text-red-500 transition-colors"
                     >
