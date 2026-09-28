@@ -245,25 +245,28 @@ export default function Compose() {
             </div>
 
             <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-              <label className="text-sm font-medium text-gray-500 text-right">Delay (sec)</label>
-              <input
-                type="number"
-                placeholder="10"
-                value={delaySeconds}
-                onChange={(e) => setDelaySeconds(e.target.value)}
-                className="w-32 bg-transparent border-b border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:border-primary placeholder-gray-300"
-              />
-            </div>
-
-            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-              <label className="text-sm font-medium text-gray-500 text-right">Max/Hour</label>
-              <input
-                type="number"
-                placeholder="50"
-                value={hourlyLimit}
-                onChange={(e) => setHourlyLimit(e.target.value)}
-                className="w-32 bg-transparent border-b border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:border-primary placeholder-gray-300"
-              />
+              <div className="col-span-2 flex items-center pl-4 gap-6 mt-2">
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-medium text-gray-700">Delay between 2 emails</label>
+                  <input
+                    type="number"
+                    placeholder="00"
+                    value={delaySeconds}
+                    onChange={(e) => setDelaySeconds(e.target.value)}
+                    className="w-16 bg-transparent border border-gray-200 rounded-md px-2 py-1 text-sm text-gray-700 focus:outline-none focus:border-primary text-center"
+                  />
+                </div>
+                <div className="flex items-center gap-4">
+                  <label className="text-sm font-medium text-gray-700">Hourly Limit</label>
+                  <input
+                    type="number"
+                    placeholder="00"
+                    value={hourlyLimit}
+                    onChange={(e) => setHourlyLimit(e.target.value)}
+                    className="w-16 bg-transparent border border-gray-200 rounded-md px-2 py-1 text-sm text-gray-700 focus:outline-none focus:border-primary text-center"
+                  />
+                </div>
+              </div>
             </div>
 
             {error && <div className="text-red-500 text-sm">{error}</div>}
