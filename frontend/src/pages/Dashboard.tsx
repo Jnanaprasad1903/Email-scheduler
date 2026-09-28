@@ -216,6 +216,16 @@ export default function Dashboard() {
                         {['SCHEDULED', 'PROCESSING'].includes(email.status) ? <Clock className="w-3 h-3" /> : null}
                         {['SCHEDULED', 'PROCESSING'].includes(email.status) ? email.time : email.status}
                       </span>
+                      {email.delayMs && (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded-full text-[10px] font-medium whitespace-nowrap">
+                          {email.delayMs / 1000}s delay
+                        </span>
+                      )}
+                      {email.hourlyLimit && (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded-full text-[10px] font-medium whitespace-nowrap">
+                          {email.hourlyLimit}/hr
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-sm text-gray-600 truncate flex-1 flex items-center gap-2">
