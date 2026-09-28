@@ -24,6 +24,8 @@ export default function Compose() {
   const [body, setBody] = useState('');
 
   const [customTime, setCustomTime] = useState('');
+  const [delaySeconds, setDelaySeconds] = useState<string>('');
+  const [hourlyLimit, setHourlyLimit] = useState<string>('');
   const [attachments, setAttachments] = useState<{name: string, content: string}[]>([]);
 
   useEffect(() => {
@@ -111,7 +113,8 @@ export default function Compose() {
         recipients: finalRecipients,
         subject,
         body,
-
+        delayMs: delaySeconds ? parseInt(delaySeconds) * 1000 : undefined,
+        hourlyLimit: hourlyLimit ? parseInt(hourlyLimit) : undefined,
         startAt: scheduleTime || new Date().toISOString(),
         attachments: attachments.length > 0 ? attachments : undefined
       }, { withCredentials: true });
@@ -241,7 +244,27 @@ export default function Compose() {
               />
             </div>
 
+            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+              <label className="text-sm font-medium text-gray-500 text-right">Delay (sec)</label>
+              <input
+                type="number"
+                placeholder="10"
+                value={delaySeconds}
+                onChange={(e) => setDelaySeconds(e.target.value)}
+                className="w-32 bg-transparent border-b border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:border-primary placeholder-gray-300"
+              />
+            </div>
 
+            <div className="grid grid-cols-[100px_1fr] items-center gap-4">
+              <label className="text-sm font-medium text-gray-500 text-right">Max/Hour</label>
+              <input
+                type="number"
+                placeholder="50"
+                value={hourlyLimit}
+                onChange={(e) => setHourlyLimit(e.target.value)}
+                className="w-32 bg-transparent border-b border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:border-primary placeholder-gray-300"
+              />
+            </div>
 
             {error && <div className="text-red-500 text-sm">{error}</div>}
 
