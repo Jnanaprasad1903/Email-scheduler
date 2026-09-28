@@ -1,5 +1,5 @@
 
-https://reach-inbox-email-scheduler-qrd1.vercel.app/compose
+https://reach-inbox-email-scheduler-qrd1.vercel.app
 
 # ReachInbox Email Scheduler
 
