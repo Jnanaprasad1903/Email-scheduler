@@ -1,7 +1,7 @@
 
 https://reach-inbox-email-scheduler-qrd1.vercel.app
 
-# ReachInbox Email Scheduler
+# Email Scheduler
 
 A production-grade, highly scalable email scheduling system built with a robust architecture to handle high throughput, global rate-limiting, and reliable queueing. 
 
